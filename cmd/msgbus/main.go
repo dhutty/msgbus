@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 
@@ -9,19 +10,30 @@ import (
 	"github.com/prologic/msgbus"
 )
 
+var (
+	host string
+	port int
+	err  error
+	msg  msgbus.Message
+	ws   *websocket.Conn
+)
+
+func init() {
+	flag.StringVar(&host, "host", "localhost", "host to connect to")
+	flag.IntVar(&port, "port", 8000, "port to connect to")
+}
+
 func main() {
-	var (
-		err error
-		msg msgbus.Message
-		ws  *websocket.Conn
-	)
+	flag.Parse()
 
 	origin := "http://localhost/"
-	url := "ws://localhost:8000/push/foo"
+	url := fmt.Sprintf("ws://%s:%d/push/foo", host, port)
 	ws, err = websocket.Dial(url, "", origin)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Printf("Listening for messages from %s", url)
 
 	for {
 		err = websocket.JSON.Receive(ws, &msg)
@@ -35,6 +47,6 @@ func main() {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("Received: %s.\n", msg.Payload)
+		log.Printf("Received: %s\n", msg.Payload)
 	}
 }
