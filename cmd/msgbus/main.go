@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -49,8 +50,7 @@ func publish(topic string, message string) {
 
 	if message == "" || message == "-" {
 		log.Printf("Reading message from stdin...\n")
-		buf := make([]byte, 1024)
-		_, err := os.Stdin.Read(buf)
+		buf, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
 			log.Fatal(err)
 		}
