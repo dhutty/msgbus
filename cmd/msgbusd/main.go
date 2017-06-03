@@ -10,6 +10,7 @@ import (
 	"golang.org/x/net/websocket"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/prologic/msgbus"
 )
 
 // IndexHandler ...
@@ -26,7 +27,7 @@ func PushHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 // PullHandler ...
 func PullHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	topic := p.ByName("topic")
-	message, ok := msgbus.Get(topic)
+	message, ok := mb.Get(topic)
 	if !ok {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -50,21 +51,21 @@ func PutHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		return
 	}
 
-	msgbus.Put(topic, msgbus.NewMessage(body))
+	mb.Put(topic, mb.NewMessage(body))
 }
 
 // PushWebSocketHandler ...
 func PushWebSocketHandler(topic string) websocket.Handler {
 	return func(conn *websocket.Conn) {
 		id := conn.Request().RemoteAddr
-		ch := msgbus.Subscribe(id, topic)
+		ch := mb.Subscribe(id, topic)
 		defer func() {
-			msgbus.Unsubscribe(id, topic)
+			mb.Unsubscribe(id, topic)
 		}()
 
 		var (
 			err error
-			ack Ack
+			ack msgbus.Ack
 		)
 
 		for {
@@ -86,7 +87,7 @@ func PushWebSocketHandler(topic string) websocket.Handler {
 	}
 }
 
-var msgbus = NewMessageBus()
+var mb = msgbus.NewMessageBus()
 
 func main() {
 	router := httprouter.New()

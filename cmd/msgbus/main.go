@@ -10,17 +10,18 @@ import (
 )
 
 func main() {
-	origin := "http://localhost/"
-	url := "ws://localhost:8000/push/foo"
-	ws, err := websocket.Dial(url, "", origin)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	var (
 		err error
 		msg msgbus.Message
+		ws  *websocket.Conn
 	)
+
+	origin := "http://localhost/"
+	url := "ws://localhost:8000/push/foo"
+	ws, err = websocket.Dial(url, "", origin)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for {
 		err = websocket.JSON.Receive(ws, &msg)
@@ -28,7 +29,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		ack := Ack{Ack: msg.Id}
+		ack := msgbus.Ack{Ack: msg.ID}
 		err = websocket.JSON.Send(ws, &ack)
 		if err != nil {
 			log.Fatal(err)
