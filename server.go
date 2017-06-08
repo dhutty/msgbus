@@ -12,59 +12,74 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// Server ...
+type Server struct {
+	bind   string
+	bus    *MessageBus
+	router *httprouter.Router
+}
+
 // IndexHandler ...
-func IndexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	fmt.Fprint(w, "Welcome!\n")
+func (s *Server) IndexHandler() httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		fmt.Fprint(w, "Welcome!\n")
+	}
 }
 
 // PushHandler ...
-func PushHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	topic := p.ByName("topic")
-	websocket.Handler(PushWebSocketHandler(topic)).ServeHTTP(w, r)
+func (s *Server) PushHandler() httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		topic := p.ByName("topic")
+		websocket.Handler(s.PushWebSocketHandler(topic)).ServeHTTP(w, r)
+	}
 }
 
 // PullHandler ...
-func PullHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	topic := p.ByName("topic")
-	message, ok := mb.Get(topic)
-	if !ok {
-		http.Error(w, "Not Found", http.StatusNotFound)
-		return
-	}
+func (s *Server) PullHandler() httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		topic := p.ByName("topic")
+		message, ok := s.bus.Get(topic)
+		if !ok {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
 
-	out, err := json.Marshal(message)
-	if err != nil {
-		http.Error(w, "Internal Error", http.StatusInternalServerError)
-		return
-	}
+		out, err := json.Marshal(message)
+		if err != nil {
+			http.Error(w, "Internal Error", http.StatusInternalServerError)
+			return
+		}
 
-	w.Write(out)
+		w.Write(out)
+	}
 }
 
 // PutHandler ...
-func PutHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	topic := p.ByName("topic")
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Internal Error", http.StatusInternalServerError)
-		return
-	}
+func (s *Server) PutHandler() httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		topic := p.ByName("topic")
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Internal Error", http.StatusInternalServerError)
+			return
+		}
 
-	mb.Put(topic, mb.NewMessage(body))
+		s.bus.Put(topic, s.bus.NewMessage(body))
+	}
 }
 
 // PushWebSocketHandler ...
-func PushWebSocketHandler(topic string) websocket.Handler {
+func (s *Server) PushWebSocketHandler(topic string) websocket.Handler {
 	return func(conn *websocket.Conn) {
 		id := conn.Request().RemoteAddr
-		ch := mb.Subscribe(id, topic)
+		ch := s.bus.Subscribe(id, topic)
 		defer func() {
-			mb.Unsubscribe(id, topic)
+			s.bus.Unsubscribe(id, topic)
 		}()
 
 		var (
 			err error
-			ack msgbus.Ack
+			ack Ack
 		)
 
 		for {
@@ -86,23 +101,26 @@ func PushWebSocketHandler(topic string) websocket.Handler {
 	}
 }
 
-type Server struct {
-	bus    *msgbus.MsgBus
-	router *httprouter.Router
-}
-
-func (s *Server) init() {
-	s.bus = msgbus.NewMessageBus()
-	s.router = httprouter.New()
-
-	router.GET("/", IndexHandler)
-	router.GET("/push/:topic", PushHandler)
-	router.GET("/pull/:topic", PullHandler)
-	router.PUT("/:topic", PutHandler)
-}
-
-func (s *Server) Run() {
-	s.init()
-
+func (s *Server) ListenAndServe() {
 	log.Fatal(http.ListenAndServe(s.bind, s.router))
+}
+
+func (s *Server) initRoutes() {
+	s.router.GET("/", s.IndexHandler())
+	s.router.GET("/push/:topic", s.PushHandler())
+	s.router.GET("/pull/:topic", s.PullHandler())
+	s.router.PUT("/:topic", s.PutHandler())
+}
+
+// NewServer ...
+func NewServer(bind string) *Server {
+	server := &Server{
+		bind:   bind,
+		bus:    NewMessageBus(),
+		router: httprouter.New(),
+	}
+
+	server.initRoutes()
+
+	return server
 }
